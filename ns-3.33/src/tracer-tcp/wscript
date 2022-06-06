@@ -1,0 +1,40 @@
+'''
+Author: Zhang Bochun
+Date: 2022-04-22 13:23:39
+LastEditTime: 2022-06-07 00:29:37
+LastEditors: Zhang Bochun
+Description: 
+FilePath: /ns-3.33/src/tracer-tcp/wscript
+'''
+# -*- Mode: python; py-indent-offset: 4; indent-tabs-mode: nil; coding: utf-8; -*-
+
+# def options(opt):
+#     pass
+
+# def configure(conf):
+#     conf.check_nonfatal(header_name='stdint.h', define_name='HAVE_STDINT_H')
+
+def build(bld):
+    module = bld.create_ns3_module('tracer-tcp', ['core', 'network','internet', 'stats'])
+    module.source = [
+        'model/tracer.cc',
+        'model/tracer-packet-sink.cc',
+        'model/tracer-bulk-send-application.cc',
+        'helper/tracer-bulk-send-helper.cc',
+        'helper/tracer-packet-sink-helper.cc',
+        'model/tracer-netdevice.cc',
+        ]
+
+    module_test = bld.create_ns3_module_test_library('tracer-tcp')
+
+    headers = bld(features='ns3header')
+    headers.module = 'tracer-tcp'
+    headers.source = [
+        'model/tracer.h',
+        'model/tracer-utils.h',
+        'model/tracer-packet-sink.h',
+        'model/tracer-bulk-send-application.h',
+        'helper/tracer-bulk-send-helper.h',
+        'helper/tracer-packet-sink-helper.h',
+        'model/tracer-netdevice.h',
+        ]
