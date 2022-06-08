@@ -1,10 +1,10 @@
 /*
  * @Author: Zhang Bochun
  * @Date: 2022-04-22 10:40:56
- * @LastEditTime: 2022-04-22 10:44:49
+ * @LastEditTime: 2022-06-07 23:48:33
  * @LastEditors: Zhang Bochun
  * @Description: 
- * @FilePath: /ns-3.33/src/tracer/helper/send-tcp-socket-factory.cc
+ * @FilePath: /ns-3.33/src/internet/model/send-tcp-socket-factory.cc
  */
 
 #include "send-tcp-socket-factory.h"
@@ -14,6 +14,8 @@
 #include "ns3/assert.h"
 
 namespace ns3 {
+
+class SendTcpSocketBase;
 
 TypeId SendTcpSocketFactory::GetTypeId (void)
 {
@@ -40,7 +42,8 @@ void SendTcpSocketFactory::SetTcp (Ptr<TcpL4Protocol> tcp)
 
 Ptr<Socket> SendTcpSocketFactory::CreateSocket (void)
 {
-  return m_tcp->CreateSocket ();
+  Ptr<TcpSocketBase> socket = CreateObject<SendTcpSocketBase> ();
+  return m_tcp->CreateSocket (socket);
 }
 
 void SendTcpSocketFactory::DoDispose (void)

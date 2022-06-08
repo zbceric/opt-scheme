@@ -229,6 +229,32 @@ TcpL4Protocol::CreateSocket (void)
   return CreateSocket (m_congestionTypeId, m_recoveryTypeId);
 }
 
+
+Ptr<Socket> 
+TcpL4Protocol::CreateSocket (Ptr<TcpSocketBase> tcpsocket)
+{
+  ObjectFactory rttFactory;
+  ObjectFactory congestionAlgorithmFactory;
+  ObjectFactory recoveryAlgorithmFactory;
+  rttFactory.SetTypeId (m_rttTypeId);
+  congestionAlgorithmFactory.SetTypeId (m_congestionTypeId);
+  recoveryAlgorithmFactory.SetTypeId (m_recoveryTypeId);
+
+  Ptr<RttEstimator> rtt = rttFactory.Create<RttEstimator> ();
+  Ptr<TcpSocketBase> socket = tcpsocket;
+  Ptr<TcpCongestionOps> algo = congestionAlgorithmFactory.Create<TcpCongestionOps> ();
+  Ptr<TcpRecoveryOps> recovery = recoveryAlgorithmFactory.Create<TcpRecoveryOps> ();
+
+  socket->SetNode (m_node);
+  socket->SetTcp (this);
+  socket->SetRtt (rtt);
+  socket->SetCongestionControlAlgorithm (algo);
+  socket->SetRecoveryAlgorithm (recovery);
+
+  m_sockets.push_back (socket);
+  return socket;
+}
+
 Ipv4EndPoint *
 TcpL4Protocol::Allocate (void)
 {

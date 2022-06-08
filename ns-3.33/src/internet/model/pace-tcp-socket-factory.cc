@@ -1,7 +1,7 @@
 /*
  * @Author: Zhang Bochun
  * @Date: 2022-04-22 10:40:56
- * @LastEditTime: 2022-06-07 01:34:33
+ * @LastEditTime: 2022-06-07 23:53:16
  * @LastEditors: Zhang Bochun
  * @Description: 
  * @FilePath: /ns-3.33/src/internet/model/pace-tcp-socket-factory.cc
@@ -40,7 +40,8 @@ void PaceTcpSocketFactory::SetTcp (Ptr<TcpL4Protocol> tcp)
 
 Ptr<Socket> PaceTcpSocketFactory::CreateSocket (void)
 {
-  return m_tcp->CreateSocket ();
+  Ptr<TcpSocketBase> socket = CreateObject<PaceTcpSocketBase> ();
+  return m_tcp->CreateSocket (socket);
 }
 
 void PaceTcpSocketFactory::DoDispose (void)

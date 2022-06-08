@@ -1,7 +1,7 @@
 /*
  * @Author: Zhang Bochun
  * @Date: 2022-04-22 10:40:45
- * @LastEditTime: 2022-04-22 12:42:14
+ * @LastEditTime: 2022-06-07 23:53:24
  * @LastEditors: Zhang Bochun
  * @Description: 
  * @FilePath: /ns-3.33/src/internet/model/pace-tcp-socket-factory.h
@@ -13,9 +13,12 @@
 #include "ns3/socket-factory.h"
 #include "ns3/ptr.h"
 
+#include "pace-tcp-socket-base.h"
+
 namespace ns3 {
 
 class TcpL4Protocol;
+class PaceTcpSocketBase;
 
 class PaceTcpSocketFactory : public SocketFactory
 {

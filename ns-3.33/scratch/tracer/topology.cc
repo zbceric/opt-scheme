@@ -1,7 +1,7 @@
 /*
  * @Author: Zhang Bochun
  * @Date: 2022-04-10 15:10:03
- * @LastEditTime: 2022-06-07 01:03:14
+ * @LastEditTime: 2022-06-07 23:32:17
  * @LastEditors: Zhang Bochun
  * @Description: 中心为2个交换机, 左侧连接到若干 sender, 右侧连接到若干 receiver
  * @FilePath: /ns-3.33/scratch/tracer/topology.cc
@@ -46,9 +46,8 @@ int main (int argc, char *argv[])
     cmd.AddValue ("flow", "num of flow", flow);
     cmd.AddValue ("foldname", "folder name to collect data", foldname);  // cmd --foldername==xxx 设置数据保存的文件夹
     cmd.Parse(argc, argv);   
-
-    Packet::EnablePrinting ();
     
+
     int num = std::stoi(flow);
     num = num > 0 ? num : 1;
     foldname += "/" + cc + "_simulation" + "/" + std::to_string(num) + "flow";
@@ -66,8 +65,8 @@ int main (int argc, char *argv[])
 
     NodeContainer sender, receiver;
     NodeContainer routers;
-    sender.Create (1);
-    receiver.Create (1);
+    sender.Create (num);
+    receiver.Create (num);
     routers.Create (2);
 
     // Install Stack
@@ -93,9 +92,16 @@ int main (int argc, char *argv[])
 
 
     // Create NetDevice containers
-    NetDeviceContainer r1r2 =       bottleneckLink.Install (routers.Get (0), routers. Get (1));
-    NetDeviceContainer senderEdge =   sendedgeLink.Install (sender. Get (0), routers. Get (0));
-    NetDeviceContainer receiverEdge = receedgeLink.Install (routers.Get (1), receiver.Get (0));
+    NetDeviceContainer r1r2 = bottleneckLink.Install (routers.Get (0), routers. Get (1));
+
+    vector<NetDeviceContainer> sendEdgeList, receEdgeList;
+    for (int i = 0; i < num; ++i)
+    {
+        NetDeviceContainer sendEdge = sendedgeLink.Install (sender. Get (i), routers. Get (0));
+        NetDeviceContainer receEdge = receedgeLink.Install (routers.Get (1), receiver.Get (i));
+        sendEdgeList.push_back (sendEdge);
+        receEdgeList.push_back (receEdge);
+    }
 
     TrafficControlHelper pfifoHelper;
     uint16_t handle = pfifoHelper.SetRootQueueDisc ("ns3::FifoQueueDisc", "MaxSize", StringValue ("50p"));
@@ -105,64 +111,59 @@ int main (int argc, char *argv[])
 
     Ipv4AddressHelper address;
     address.SetBase ("10.1.1.0", "255.255.255.0");
+    vector<Ipv4InterfaceContainer> islist, irlist;
+
     Ipv4InterfaceContainer i1i2 = address.Assign (r1r2);
-    address.NewNetwork ();
-    Ipv4InterfaceContainer is1  = address.Assign (senderEdge);
-    address.NewNetwork ();
-    Ipv4InterfaceContainer ir1  = address.Assign (receiverEdge);
+    for (int i = 0; i < num; ++i)
+    {
+        address.NewNetwork ();
+        Ipv4InterfaceContainer is = address.Assign (sendEdgeList[i]);
+        islist.push_back (is);
+    }
+    for (int i = 0; i < num; ++i)
+    {
+        address.NewNetwork ();
+        Ipv4InterfaceContainer ir = address.Assign (receEdgeList[i]);
+        irlist.push_back (ir);
+    }
 
     Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
 
-    // std::string netdevicefolder = "netdevice";
-    // Ptr<TracerNetDevice> r1r2_1         = CreateObject<TracerNetDevice> (r1r2.Get(0),        i1i2.GetAddress (0), netdevicefolder);
-    // Ptr<TracerNetDevice> r1r2_2         = CreateObject<TracerNetDevice> (r1r2.Get(1),        i1i2.GetAddress (1), netdevicefolder);
-    // Ptr<TracerNetDevice> senderEdge_1   = CreateObject<TracerNetDevice> (senderEdge.Get(0),   is1.GetAddress (0), netdevicefolder);
-    // Ptr<TracerNetDevice> senderEdge_2   = CreateObject<TracerNetDevice> (senderEdge.Get(1),   is1.GetAddress (1), netdevicefolder);
-    // Ptr<TracerNetDevice> receiverEdge_1 = CreateObject<TracerNetDevice> (receiverEdge.Get(0), ir1.GetAddress (0), netdevicefolder);
-    // Ptr<TracerNetDevice> receiverEdge_2 = CreateObject<TracerNetDevice> (receiverEdge.Get(1), ir1.GetAddress (1), netdevicefolder);
-    
-    
-
-    // Ptr<RateErrorModel> em = CreateObject<RateErrorModel> ();
-    // em->SetAttribute ("ErrorRate", DoubleValue (0.00001));
-    // receiverEdge.Get (1)->SetAttribute ("ReceiveErrorModel", PointerValue (em));
-
-
     uint16_t sinkPort = 8080;
     std::string sendSocketFactory = "ns3::SendTcpSocketFactory";
-    InetSocketAddress addr_target = InetSocketAddress (ir1.GetAddress (1), sinkPort);
-    InetSocketAddress addr_listen = InetSocketAddress (Ipv4Address::GetAny(), sinkPort);
+    std::string receSocketFactory = "ns3::PaceTcpSocketFactory";
+
+    double startTime [5] = {10.0, 20.0, 40.0, 60.0, 80.0};
+    double endTime   [5] = {100.0, 120.0, 140.0, 160.0, 180.0}; 
 
 
-    TracerBulkSendHelper sour (sendSocketFactory, addr_target, Tracer::E_TRACE_SEND_ALL | Tracer::E_TRACE_SEND_ALLRTT);
-    sour.SetAttribute ("CongestionAlgo", StringValue (cc));
-    sour.SetAttribute ("MaxBytes", UintegerValue (0));                      // 数据量不设置上限
-    sour.SetAttribute ("Foldername", StringValue (foldname));
-
-
-    list<ApplicationContainer>   list_app;
+    vector<ApplicationContainer> sendapplist, receapplist;
     for (int i = 0; i < num; ++i)
     {
-        ApplicationContainer sourApps = sour.Install (sender.Get(0));
-        list_app.push_back (sourApps);
-        sourApps.Start (Seconds (10.0 + 10 * i));                              // 设置Application启动时间
-        sourApps.Stop  (Seconds (40.0)); 
-    }
+        InetSocketAddress addr_target = InetSocketAddress (irlist[i].GetAddress (1), sinkPort);
+        InetSocketAddress addr_listen = InetSocketAddress (Ipv4Address::GetAny (),   sinkPort);
+
+        TracerBulkSendHelper sour (sendSocketFactory, addr_target, Tracer::E_TRACE_SEND_ALL);
+        sour.SetAttribute ("CongestionAlgo", StringValue (cc));
+        sour.SetAttribute ("MaxBytes", UintegerValue (0));                      // 数据量不设置上限
+        sour.SetAttribute ("Foldername", StringValue (foldname));
         
-
-    // 在 node 1 中安装接收端应用
-    std::string receSocketFactory = "ns3::PaceTcpSocketFactory";
-    // std::string receSocketFactory = "ns3::TcpSocketFactory";
-    TracerPacketSinkHelper dest (receSocketFactory, addr_listen, Tracer::E_TRACE_RECE_ALL);
-    dest.SetAttribute ("Foldername", StringValue (foldname));
+        ApplicationContainer sourApps = sour.Install (sender.Get(i));
+        sendapplist.push_back (sourApps);
+        sourApps.Start (Seconds (startTime[i]));                              // 设置Application启动时间
+        sourApps.Stop  (Seconds (endTime[i])); 
 
 
-    ApplicationContainer destApps = dest.Install (receiver.Get (0));
-    destApps.Start (Seconds (10.0));
-    destApps.Stop  (Seconds (105.0));
+        TracerPacketSinkHelper dest (receSocketFactory, addr_listen, Tracer::E_TRACE_RECE_ALL);
+        dest.SetAttribute ("Foldername", StringValue (foldname));
 
+        ApplicationContainer destApps = dest.Install (receiver.Get (i));
+        destApps.Start (Seconds (10.0));
+        destApps.Stop  (Seconds (295.0));
+    }
 
-    Simulator::Stop(Seconds(110.0));
+        
+    Simulator::Stop(Seconds(300.0));
     Simulator::Run();
     Simulator::Destroy();
 

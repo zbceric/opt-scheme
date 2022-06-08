@@ -28,7 +28,6 @@
 #include "ns3/sequence-number.h"
 #include "ip-l4-protocol.h"
 
-
 namespace ns3 {
 
 class Node;
@@ -127,6 +126,7 @@ public:
     *
     */
   Ptr<Socket> CreateSocket (TypeId congestionTypeId);
+  Ptr<Socket> CreateSocket (Ptr<TcpSocketBase> tcpsocket);
 
   /**
    * \brief Allocate an IPv4 Endpoint
