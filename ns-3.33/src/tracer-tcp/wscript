@@ -1,7 +1,7 @@
 '''
 Author: Zhang Bochun
 Date: 2022-04-22 13:23:39
-LastEditTime: 2022-06-07 00:29:37
+LastEditTime: 2022-06-19 19:31:42
 LastEditors: Zhang Bochun
 Description: 
 FilePath: /ns-3.33/src/tracer-tcp/wscript
@@ -23,6 +23,7 @@ def build(bld):
         'helper/tracer-bulk-send-helper.cc',
         'helper/tracer-packet-sink-helper.cc',
         'model/tracer-netdevice.cc',
+        'model/net-device-tracer.cc',
         ]
 
     module_test = bld.create_ns3_module_test_library('tracer-tcp')
@@ -37,4 +38,5 @@ def build(bld):
         'helper/tracer-bulk-send-helper.h',
         'helper/tracer-packet-sink-helper.h',
         'model/tracer-netdevice.h',
+        'model/net-device-tracer.h',
         ]

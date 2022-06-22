@@ -7,6 +7,7 @@
     
 
 // Module headers:
+#include "net-device-tracer.h"
 #include "tracer-bulk-send-application.h"
 #include "tracer-bulk-send-helper.h"
 #include "tracer-netdevice.h"

@@ -10,7 +10,7 @@
             "type": "cppdbg",
             "request": "launch",
             // "program": "${fileDirname}/${fileBasenameNoExtension}",
-            "program": "/home/zhangbochun/zbc_study/opt-scheme/ns-3.33/build/scratch/tracer/tracer",
+            "program": "/home/zhangbochun/zbc_study/opt-scheme/ns-3.33/build/scratch/new/new",
             // "program": "/home/zhangbochun/zbc_study/opt-scheme/ns-3.33/build/scratch/myseventh",
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

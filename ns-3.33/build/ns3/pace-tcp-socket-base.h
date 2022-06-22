@@ -1,7 +1,7 @@
 /*
  * @Author: Zhang Bochun
  * @Date: 2022-04-22 10:10:43
- * @LastEditTime: 2022-06-07 01:06:46
+ * @LastEditTime: 2022-06-21 20:34:55
  * @LastEditors: Zhang Bochun
  * @Description: Receiver Pace ACK Tcp Socket Base
  * @FilePath: /ns-3.33/src/internet/model/pace-tcp-socket-base.h
@@ -12,6 +12,7 @@
 
 #include <stdint.h>
 #include <queue>
+#include <vector>
 #include "ns3/traced-value.h"
 #include "ns3/tcp-socket.h"
 #include "ns3/ipv4-header.h"
@@ -182,8 +183,8 @@ protected:
         PC_BGREC,           // 恢复
         PC_PROBE,           // 寻找收敛点
         PC_STABL,           // 稳定状态
-        PC_RECVR,
-        PC_DRAIN,
+        PC_RECVR,           // 从丢包中恢复
+        PC_MNRTT,           // 测量 minRTT
     } PacingState;
     
     typedef std::list<TcpPacket*> TcpPacketList; //!< container for data stored in the buffer
@@ -197,6 +198,8 @@ protected:
     TcpPacketList   m_ackList;
     TcpPacketList   m_ackSentList;
     EventId         m_ackSentEvent {};
+    EventId         m_minRttUpdateEvent;
+    EventId         m_exitRttProbeEvent;
 
     // uint32_t    m_probeRound {0};
     uint32_t    m_noIncreaseRoundCnt {0};
@@ -214,11 +217,18 @@ protected:
     Time    m_lastRxTime {"0s"};
     Time    m_minRxRTT {Time::Max ()};
     Time    m_maxRxRTT {0};
+    Time    m_minTmpRxRTT {Time::Max ()};
     Time    m_lastRoundRtt {0};
     Time    m_currRoundRtt {0};
     Time    m_delayLow;
     Time    m_delayHigh;
     Time    m_timestampOffset;
+    Time    m_probeRttTime {"200ms"};
+    Time    m_intervalRttTime {"10s"};
+    Time    m_samplingRTT {Time::Max ()};
+    Time    m_lastSamplingTime;
+    std::vector<Time> timeVector;
+
     double  m_alpha {0.05}, m_beta {0.20};
     DataRate m_step = DataRate ("0.2Mbps");
 
@@ -233,8 +243,9 @@ protected:
     bool            m_exitDrain   {false};
 
     // PacingState     m_pacingState {PC_SLOWSTART};
-    DataRate        m_bandwidth    {"0Mbps"};               // 最新计算得到的 receive rate
-    DataRate        m_maxBandwidth {"0Mbps"};               // 自连接创建以来的最大 bw
+    DataRate        m_bandwidth     {DataRate("0Mbps")};               // 最新计算得到的 receive rate
+    DataRate        m_maxBandwidth  {DataRate("0Mbps")};               // 自连接创建以来的最大 bw
+    DataRate        m_bfPrbRttRate  {DataRate("0Mbps")};
     DataRate        m_constAckRate  {DataRate("0Mbps")};
     DataRate        m_pacingAckRate {DataRate("0Mbps")};   
     DataRate        m_lastRoundMxBw {DataRate("0Mbps")};
@@ -272,6 +283,8 @@ protected:
     void SendAck ();
     void PaceAndScheduleAck (Ptr<Packet> packet, TcpHeader header, SequenceNumber32 seq);
     void DestoryTcpPacket (TcpPacket* tcpPacket);
+    void EntrMinRttProbe ();
+    void ExitMinRttProbe ();
 
     
     TcpSocketState::TcpCongState_t m_lastCongState;
@@ -291,7 +304,7 @@ protected:
     void UpdateAckPacingRate ();
     void ProcessOptionTimestamp (const Ptr<const TcpOption> option, const SequenceNumber32 &seq);
 
-    static const int CYCLE = 4;
+    static const int CYCLE = 8;
     // double FactorBaseCycle[CYCLE] = {1.25, 0.75, 1, 1, 1, 1, 1, 1};
     int cycleoffset = 0;
     // double FactorBaseCycle[CYCLE] = {1, 1, 1, 1, 1, 1, 1, 1};

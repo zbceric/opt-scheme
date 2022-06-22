@@ -1,7 +1,7 @@
 /*
  * @Author: Zhang Bochun
  * @Date: 2022-04-05 20:31:40
- * @LastEditTime: 2022-05-03 20:50:10
+ * @LastEditTime: 2022-06-20 17:49:56
  * @LastEditors: Zhang Bochun
  * @Description: 
  * @FilePath: /ns-3.33/src/tracer-tcp/model/tracer.cc
@@ -35,8 +35,8 @@ Tracer::Tracer (Ptr<Socket> socket, uint16_t flag, std::string& foldername)
     m_traceFlag = flag;
     m_foldername = foldername;
 
-    m_minTxRTT = Time("200ms");
-    m_minRxRTT = Time("200ms");
+    m_minTxRTT = Time("20ms");
+    m_minRxRTT = Time("20ms");
 
     m_socket->GetSockName (m_local);
     m_socket->GetPeerName (m_peer );
@@ -381,7 +381,7 @@ void Tracer::TraceSendRttCallback (Time oldValue, Time newValue)
     if ((m_traceFlag & E_TRACE_SEND_RTT) && m_send_rtt.is_open())
     {
         Time now = Simulator::Now ();
-        m_send_rtt << now.GetSeconds() << "\t" << newValue.GetSeconds() << std::endl;
+        m_send_rtt << now.GetSeconds() << "\t" << newValue.GetMicroSeconds() / 1000.0 << std::endl;
     }
 }
 
@@ -503,7 +503,7 @@ void Tracer::TraceReceRttCallback (Time oldValue, Time newValue)
     if ((m_traceFlag & E_TRACE_RECE_RTT) && m_rece_rtt.is_open())
     {
         Time now = Simulator::Now ();
-        m_rece_rtt << now.GetSeconds() << "\t" << newValue.GetSeconds() << std::endl;
+        m_rece_rtt << now.GetSeconds() << "\t" << newValue.GetMicroSeconds() / 1000.0 << std::endl;
     }
 }
 

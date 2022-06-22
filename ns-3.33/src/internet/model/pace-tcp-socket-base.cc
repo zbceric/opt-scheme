@@ -1,7 +1,7 @@
 // /*
 //  * @Author: Zhang Bochun
 //  * @Date: 2022-04-22 10:27:58
-//  * @LastEditTime: 2022-05-09 21:02:17
+//  * @LastEditTime: 2022-06-17 22:48:04
 //  * @LastEditors: Zhang Bochun
 //  * @Description: Receiver Pace ACK Tcp Socket Base
 //  * @FilePath: /ns-3.33/src/internet/model/pace-tcp-socket-base.cc
@@ -1823,8 +1823,29 @@
 
 //             m_ReceRttEstimator->Measurement (rtt);
 //             m_lastReceRtt = m_ReceRttEstimator->GetEstimate();
-//             m_minRxRTT = std::min (m_lastReceRtt.Get (), m_minRxRTT);
+
 //             m_maxRxRTT = std::max (rtt, m_maxRxRTT);
+
+//             if (m_pacingState == PC_MNRTT)
+//             {
+//                 if (m_minTmpRxRTT >= m_lastReceRtt.Get ())
+//                 {
+//                     m_minTmpRxRTT = std::min (m_lastReceRtt.Get (), m_minTmpRxRTT);
+//                 }
+//             }
+//             else
+//             {
+//                 if (m_minRxRTT >= m_lastReceRtt.Get ())
+//                 {
+//                     m_minRxRTT = std::min (m_lastReceRtt.Get (), m_minRxRTT);
+//                     // if (m_pacingState == PC_PROBE)
+//                     m_minRttUpdateEvent.Cancel ();
+//                     m_minRttUpdateEvent = Simulator::Schedule (m_intervalRttTime, &PaceTcpSocketBase::EntrMinRttProbe, this);
+//                 }
+//             }
+
+//             // m_minRxRTT = Time ("105ms");
+//             // m_maxRxRTT = Time ("110ms");
 
 //             m_delayLow  = (m_maxRxRTT - m_minRxRTT) * m_alpha + m_minRxRTT;
 //             m_delayHigh = (m_maxRxRTT - m_minRxRTT) * m_beta  + m_minRxRTT;
@@ -2629,8 +2650,8 @@
 //         }
 //         else {
 //             intervaltime = m_pacingAckRate.CalculateBytesTxTime (npacket * GetSegSize ());
-//             // intervaltime = std::min (intervaltime, 0.5 * m_peerSocket->m_rtt->GetEstimate ());
 //         }
+//         intervaltime = std::min (intervaltime, m_minRxRTT);
 //         m_ackSentEvent = Simulator::Schedule (intervaltime, &PaceTcpSocketBase::SendAck, this);
 //     }
 //     else
@@ -2713,6 +2734,7 @@
 
 //         // 计算 round
 //         CalculateRound (tcpPacket);
+//         m_maxBwFilter.Update (m_bandwidth, m_round);
         
 
 //         // 更新并维护 round max bandwidth
@@ -2731,7 +2753,7 @@
 //         if (dataRateFile.is_open())
 //         {
 //             dataRateFile << now.GetSeconds () << "\t" << m_bandwidth.GetBitRate() * 1.0 / 1000/ 1000 << std::endl;
-//             maxRateFile  << now.GetSeconds () << "\t" << m_maxBwFilter.GetBest ().GetBitRate() * 1.0 / 1000/ 1000 << std::endl;    
+//             // maxRateFile  << now.GetSeconds () << "\t" << m_maxBwFilter.GetBest ().GetBitRate() * 1.0 / 1000/ 1000 << std::endl;    
 //         }
 //     } 
 //     else
@@ -2790,7 +2812,7 @@
 //         // std::cout << index << "- Time: " << Simulator::Now().GetSecouns () << ", new round = " << m_round << std::endl; 
 //         m_lastRoundRtt = m_currRoundRtt;
 //         m_currRoundRtt = m_ReceRttEstimator->GetEstimate ();
-//         m_gradient = (m_currRoundRtt.GetSeconds () - m_lastRoundRtt.GetSeconds ())/(m_maxRxRTT.GetSeconds () - m_minRxRTT.GetSeconds ());
+//         m_gradient = (m_currRoundRtt.GetSeconds () - m_lastRoundRtt.GetSeconds ())/m_minRxRTT.GetSeconds ();
 //     }
 
 // }
@@ -2828,36 +2850,22 @@
 
 //         break;
 
-//     case PC_BGREC:
 //     case PC_RECVR:
 //         if (m_roundStart)
 //         {
 //             m_pacingAckRate = m_maxBandwidth;
-
-//             // if (m_currRoundRtt < m_delayHigh)
-//             // {
-//             //     m_exitRecovery = true;
-//             // }
-//             // else
-//             // {
-//             //     m_enterDrain = true;
-//             // }
 //         }
 
 //     case PC_STABL:
 //         if (m_roundStart)
 //         {
-//             m_ltltRoundPacingRate = m_lastRoundPacingRate;
-//             m_lastRoundPacingRate = m_pacingAckRate; 
-
-//             // double baserate = m_maxBwFilter.GetBest ().GetBitRate () * 1.0;   // 这个值是最近几个周期测得的最大bandwidth, 作为可用带宽, 偏大
-            
 //             if (m_lastRoundRtt > m_delayHigh)
 //             {
-//                 double rate = std::min ((m_lastRoundRtt.GetSeconds () - m_delayHigh.GetSeconds ()) / m_minRxRTT.GetSeconds (), 0.3);
-//                 rate = std::min (rate, 0.15);
+//                 double rate = (m_lastRoundRtt.GetSeconds () - m_delayHigh.GetSeconds ()) / m_minRxRTT.GetSeconds ();
+//                 rate = std::min (rate, 0.70);
 //                 auto delta = rate * m_lastRoundMxBw.GetBitRate ();
 //                 m_pacingAckRate = DataRate (m_maxBwFilter.GetBest ().GetBitRate () - delta);
+//                 // m_maxBwFilter.Reset (m_pacingAckRate, m_round);
 //             }
 //             else if (m_lastRoundRtt > m_delayLow)
 //             {
@@ -2868,45 +2876,7 @@
 //                 auto delta = (m_delayLow.GetSeconds () - m_lastRoundRtt.GetSeconds ()) / m_minRxRTT.GetSeconds () * m_lastRoundMxBw.GetBitRate ();
 //                 m_pacingAckRate = DataRate (m_maxBwFilter.GetBest ().GetBitRate () + delta);
 //             }
-
-
-//             // if (m_lastRoundRtt > m_delayHigh)
-//             // {
-//             //     double rate = std::min ((m_lastRoundRtt.GetSeconds () - m_delayLow.GetSeconds ()) / m_minRxRTT.GetSeconds (), 0.3);
-//             //     // rate = std::min (rate, 0.15);
-//             //     auto delta = rate * m_lastRoundMxBw.GetBitRate ();
-//             //     m_pacingAckRate = DataRate (m_maxBwFilter.GetBest ().GetBitRate () - delta);
-//             // }
-//             // else if (m_lastRoundRtt > m_delayLow)
-//             // {
-//             //     m_pacingAckRate = DataRate (m_maxBwFilter.GetBest ().GetBitRate () + m_step.GetBitRate ());
-//             // }
-//             // else
-//             // {
-//             //     auto delta = (m_delayLow.GetSeconds () - m_lastRoundRtt.GetSeconds ()) / m_minRxRTT.GetSeconds () * m_lastRoundMxBw.GetBitRate ();
-//             //     m_pacingAckRate = DataRate (m_maxBwFilter.GetBest ().GetBitRate () + delta);
-//             // }
-
-
-//             // if (flags[m_round % CYCLE] == 1)
-//             // {
-//             //     m_pacingAckRate = DataRate (baserate * 1.05);
-//             // }
-//             // else
-//             // {
-//             //     m_pacingAckRate = DataRate (m_maxBwFilter.GetBest ().GetBitRate () * 0.98);
-//             // }
 //         }
-
-//         if (m_bandwidth <= m_lastRoundPacingRate)
-//         {
-//             m_maxBwFilter.Update (m_bandwidth, m_round);
-//         }
-//         else
-//         {
-//             m_maxBwFilter.Update (m_lastRoundPacingRate, m_round);
-//         }
-
 //         break;
 
 //     default:
@@ -2939,19 +2909,28 @@
 
 // uint8_t PaceTcpSocketBase::Index = 0;
 
+// void 
+// PaceTcpSocketBase::EntrMinRttProbe ()
+// {
+//     m_pacingState = PC_MNRTT;
+//     m_minTmpRxRTT = Time::Max ();
+//     m_bfPrbRttRate = m_maxBwFilter.GetBest ();
+//     m_pacingAckRate = DataRate (m_bfPrbRttRate.GetBitRate () / 10);
+//     m_exitRttProbeEvent = Simulator::Schedule (m_probeRttTime, &PaceTcpSocketBase::ExitMinRttProbe, this);
+// }
+
+// void 
+// PaceTcpSocketBase::ExitMinRttProbe ()
+// {
+//     m_pacingState = PC_STABL;
+//     m_minRxRTT = m_minTmpRxRTT;
+//     m_maxBwFilter.Update (m_bfPrbRttRate, m_round);
+//     m_pacingAckRate = m_bfPrbRttRate;
+//     m_minRttUpdateEvent = Simulator::Schedule (m_intervalRttTime, &PaceTcpSocketBase::EntrMinRttProbe, this);
+// }
+
 // } // namespace ns3
 
-
-
-
-/*
- * @Author: Zhang Bochun
- * @Date: 2022-04-22 10:27:58
- * @LastEditTime: 2022-05-09 15:12:09
- * @LastEditors: Zhang Bochun
- * @Description: Receiver Pace ACK Tcp Socket Base
- * @FilePath: /ns-3.33/src/internet/model/pace-tcp-socket-base.cc
- */
 
 #include "ns3/abort.h"
 #include "ns3/node.h"
@@ -4188,14 +4167,11 @@ PaceTcpSocketBase::ProcessAck(const SequenceNumber32 &ackNumber, bool scoreboard
             if (m_tcb->m_congState == TcpSocketState::CA_OPEN)
             {
                 m_congestionControl->IncreaseWindow (m_tcb, segsAcked);
-
                 m_tcb->m_cWndInfl = m_tcb->m_cWnd;
-
                 NS_LOG_LOGIC ("Congestion control called: " <<
                               " cWnd: " << m_tcb->m_cWnd <<
                               " ssTh: " << m_tcb->m_ssThresh <<
                               " segsAcked: " << segsAcked);
-
                 NewAck (ackNumber, true);
             }
         }
@@ -4206,24 +4182,19 @@ PaceTcpSocketBase::ProcessAck(const SequenceNumber32 &ackNumber, bool scoreboard
     // return in between
     UpdatePacingRate ();
 }
-
-
 /* Send an empty packet with specified TCP flags */
 void
 PaceTcpSocketBase::SendEmptyPacket (uint8_t flags)
 {
     NS_LOG_FUNCTION (this << static_cast<uint32_t> (flags));
-
     if (m_endPoint == nullptr && m_endPoint6 == nullptr)
     {
         NS_LOG_WARN ("Failed to send empty packet due to null endpoint");
         return;
     }
-
     Ptr<Packet> p = Create<Packet> ();
     TcpHeader header;
     SequenceNumber32 s = m_tcb->m_nextTxSequence;
-
     if (flags & TcpHeader::FIN)
     {
         flags |= TcpHeader::ACK;
@@ -4232,9 +4203,7 @@ PaceTcpSocketBase::SendEmptyPacket (uint8_t flags)
     {
         ++s;
     }
-
     AddSocketTags (p);
-
     header.SetFlags (flags);
     header.SetSequenceNumber (s);
     header.SetAckNumber (m_tcb->m_rxBuffer->NextRxSequence ());
@@ -4248,12 +4217,9 @@ PaceTcpSocketBase::SendEmptyPacket (uint8_t flags)
         header.SetSourcePort (m_endPoint6->GetLocalPort ());
         header.SetDestinationPort (m_endPoint6->GetPeerPort ());
     }
-
     AddOptions (header);
-
     // RFC 6298, clause 2.4
     m_rto = Max (m_rtt->GetEstimate () + Max (m_clockGranularity, m_rtt->GetVariation () * 4), m_minRto);
-
     uint16_t windowSize = AdvertisedWindowSize ();
     bool hasSyn = flags & TcpHeader::SYN;
     bool hasFin = flags & TcpHeader::FIN;
@@ -4264,12 +4230,10 @@ PaceTcpSocketBase::SendEmptyPacket (uint8_t flags)
         { // The window scaling option is set only on SYN packets
             AddOptionWScale (header);
         }
-
         if (m_sackEnabled)
         {
             AddOptionSackPermitted (header);
         }
-
         if (m_synCount == 0)
         {   // No more connection retries, give up
             NS_LOG_LOGIC ("Connection failed.");
@@ -4285,7 +4249,6 @@ PaceTcpSocketBase::SendEmptyPacket (uint8_t flags)
             m_rto = m_cnTimeout * backoffCount;
             m_synCount--;
         }
-
         if (m_synRetries - 1 == m_synCount)
         {
             UpdateRttHistory (s, 0, false);
@@ -4294,11 +4257,9 @@ PaceTcpSocketBase::SendEmptyPacket (uint8_t flags)
         { // This is SYN retransmission
             UpdateRttHistory (s, 0, true);
         }
-
         windowSize = AdvertisedWindowSize (false);
     }
     header.SetWindowSize (windowSize);
-
     if (flags & TcpHeader::ACK)
     { // If sending an ACK, cancel the delay ACK as well
         m_delAckEvent.Cancel ();
@@ -4313,15 +4274,11 @@ PaceTcpSocketBase::SendEmptyPacket (uint8_t flags)
         }
         NS_LOG_INFO ("Sending a pure ACK, acking seq " << m_tcb->m_rxBuffer->NextRxSequence ());
     }
-
-
     AppendAck (p, header);
     if (m_ackSentEvent.IsExpired())
     {
         SendAck ();
     }
-
-
     if (m_retxEvent.IsExpired () && (hasSyn || hasFin) && !isAck )
     { // Retransmit SYN / SYN+ACK / FIN / FIN+ACK to guard against lost
         NS_LOG_LOGIC ("Schedule retransmission timeout at time "
@@ -4329,10 +4286,7 @@ PaceTcpSocketBase::SendEmptyPacket (uint8_t flags)
                       << (Simulator::Now () + m_rto.Get ()).GetSeconds ());
         m_retxEvent = Simulator::Schedule (m_rto, &PaceTcpSocketBase::SendEmptyPacket, this, flags);
     }
-
 }
-
-
 /* This function is called only if a SYN received in LISTEN state. After
    PaceTcpSocketBase cloned, allocate a new end point to handle the incoming
    connection and send a SYN+ACK to complete the handshake. */
@@ -4362,13 +4316,9 @@ PaceTcpSocketBase::CompleteFork (Ptr<Packet> p, const TcpHeader& h,
         m_endPoint = nullptr;
     }
     m_tcp->AddSocket (this);
-
-
     // 自己加的
     // 初始化函数
     Initialization ();
-
-
     // Change the cloned socket from LISTEN state to SYN_RCVD
     NS_LOG_DEBUG ("LISTEN -> SYN_RCVD");
     m_state = SYN_RCVD;
@@ -4377,7 +4327,6 @@ PaceTcpSocketBase::CompleteFork (Ptr<Packet> p, const TcpHeader& h,
     SetupCallback ();
     // Set the sequence number and send SYN+ACK
     m_tcb->m_rxBuffer->SetNextRxSequence (h.GetSequenceNumber () + SequenceNumber32 (1));
-
     /* Check if we received an ECN SYN packet. Change the ECN state of receiver to ECN_IDLE if sender has sent an ECN SYN
     * packet and the traffic is ECN Capable
     */
@@ -4393,10 +4342,8 @@ PaceTcpSocketBase::CompleteFork (Ptr<Packet> p, const TcpHeader& h,
         SendEmptyPacket (TcpHeader::SYN | TcpHeader::ACK);
         m_tcb->m_ecnState = TcpSocketState::ECN_DISABLED;
     }
-
     ++Index;
     index = Index;
-
     char buf[FILENAME_MAX];
     std::string path = std::string (getcwd(buf, FILENAME_MAX))+ "/traces/info/";
     if (!dataRateFile.is_open())
@@ -4415,30 +4362,23 @@ PaceTcpSocketBase::CompleteFork (Ptr<Packet> p, const TcpHeader& h,
         targetRateFile.open (filename.c_str(), std::fstream::out);
     }
 }
-
-
 /* Extract at most maxSize bytes from the TxBuffer at sequence seq, add the
     TCP header, and send to TcpL4Protocol */
 uint32_t
 PaceTcpSocketBase::SendDataPacket (SequenceNumber32 seq, uint32_t maxSize, bool withAck)
 {
     NS_LOG_FUNCTION (this << seq << maxSize << withAck);
-
     bool isStartOfTransmission = BytesInFlight () == 0U;
     TcpTxItem *outItem = m_txBuffer->CopyFromSequence (maxSize, seq);
-
     m_rateOps->SkbSent(outItem, isStartOfTransmission&&(m_tcb->m_highTxMark==m_tcb->m_nextTxSequence));
-
     bool isRetransmission = outItem->IsRetrans ();
     Ptr<Packet> p = outItem->GetPacketCopy ();
     uint32_t sz = p->GetSize (); // Size of packet
     uint8_t flags = withAck ? TcpHeader::ACK : 0;
     uint32_t remainingData = m_txBuffer->SizeFromSequence (seq + SequenceNumber32 (sz));
-
     // TCP sender should not send data out of the window advertised by the
     // peer when it is not retransmission.
     NS_ASSERT (isRetransmission || ((m_highRxAckMark + SequenceNumber32 (m_rWnd)) >= (seq + SequenceNumber32 (maxSize))));
-
     if (IsPacingEnabled ())
     {
         NS_LOG_INFO ("Pacing is enabled");
@@ -4457,13 +4397,11 @@ PaceTcpSocketBase::SendDataPacket (SequenceNumber32 seq, uint32_t maxSize, bool 
     {
         NS_LOG_INFO ("Pacing is disabled");
     }
-
     if (withAck)
     {
         m_delAckEvent.Cancel ();
         m_delAckCount = 0;
     }
-
     if (m_tcb->m_ecnState == TcpSocketState::ECN_ECE_RCVD && m_ecnEchoSeq.Get() > m_ecnCWRSeq.Get () && !isRetransmission)
     {
         NS_LOG_DEBUG (TcpSocketState::EcnStateName[m_tcb->m_ecnState] << " -> ECN_CWR_SENT");
@@ -4472,9 +4410,7 @@ PaceTcpSocketBase::SendDataPacket (SequenceNumber32 seq, uint32_t maxSize, bool 
         flags |= TcpHeader::CWR;
         NS_LOG_INFO ("CWR flags set");
     }
-
     AddSocketTags (p);
-
     if (m_closeOnEmpty && (remainingData == 0))
     {
         flags |= TcpHeader::FIN;
@@ -4505,19 +4441,15 @@ PaceTcpSocketBase::SendDataPacket (SequenceNumber32 seq, uint32_t maxSize, bool 
     }
     header.SetWindowSize (AdvertisedWindowSize ());
     AddOptions (header);
-
     if (m_retxEvent.IsExpired ())
     {
         // Schedules retransmit timeout. m_rto should be already doubled.
-
         NS_LOG_LOGIC (this << " SendDataPacket Schedule ReTxTimeout at time " <<
                       Simulator::Now ().GetSeconds () << " to expire at time " <<
                       (Simulator::Now () + m_rto.Get ()).GetSeconds () );
         m_retxEvent = Simulator::Schedule (m_rto, &PaceTcpSocketBase::ReTxTimeout, this);
     }
-
     m_txTrace (p, header, this);
-
     if (m_endPoint)
     {
         m_tcp->SendPacket (p, header, m_endPoint->GetLocalAddress (),
@@ -4534,15 +4466,12 @@ PaceTcpSocketBase::SendDataPacket (SequenceNumber32 seq, uint32_t maxSize, bool 
                       remainingData << " via TcpL4Protocol to " <<  m_endPoint6->GetPeerAddress () <<
                       ". Header " << header);
     }
-
     UpdateRttHistory (seq, sz, isRetransmission);
-
     // Update bytes sent during recovery phase
     if (m_tcb->m_congState == TcpSocketState::CA_RECOVERY || m_tcb->m_congState == TcpSocketState::CA_CWR)
     {
         m_recoveryOps->UpdateBytesSent (sz);
     }
-
     // Notify the application of the data being sent unless this is a retransmit
     if (!isRetransmission)
     {
@@ -4553,13 +4482,11 @@ PaceTcpSocketBase::SendDataPacket (SequenceNumber32 seq, uint32_t maxSize, bool 
     m_tcb->m_highTxMark = std::max (seq + sz, m_tcb->m_highTxMark.Get ());
     return sz;
 }
-
 void
 PaceTcpSocketBase::UpdateRttHistory (const SequenceNumber32 &seq, uint32_t sz,
                                  bool isRetransmission)
 {
     NS_LOG_FUNCTION (this);
-
     // update the history of sequence numbers used to calculate the RTT
     if (isRetransmission == false)
     { // This is the next expected one, just log at end
@@ -4578,13 +4505,11 @@ PaceTcpSocketBase::UpdateRttHistory (const SequenceNumber32 &seq, uint32_t sz,
         }
     }
 }
-
 uint32_t
 PaceTcpSocketBase::UnAckDataCount () const
 {
     return m_tcb->m_highTxMark - m_txBuffer->HeadSequence ();
 }
-
 uint32_t
 PaceTcpSocketBase::BytesInFlight () const
 {
@@ -4592,17 +4517,14 @@ PaceTcpSocketBase::BytesInFlight () const
     // Ugly, but we are not modifying the state; m_bytesInFlight is used
     // only for tracing purpose.
     m_tcb->m_bytesInFlight = bytesInFlight;
-
     NS_LOG_DEBUG ("Returning calculated bytesInFlight: " << bytesInFlight);
     return bytesInFlight;
 }
-
 uint32_t
 PaceTcpSocketBase::Window (void) const
 {
     return std::min (m_rWnd.Get (), m_tcb->m_cWnd.Get ());
 }
-
 uint32_t
 PaceTcpSocketBase::AvailableWindow () const
 {
@@ -4610,13 +4532,11 @@ PaceTcpSocketBase::AvailableWindow () const
     uint32_t inflight = BytesInFlight (); // Number of outstanding bytes
     return (inflight > win) ? 0 : win - inflight;
 }
-
 uint16_t
 PaceTcpSocketBase::AdvertisedWindowSize (bool scale) const
 {
     NS_LOG_FUNCTION (this << scale);
     uint32_t w;
-
     // We don't want to advertise 0 after a FIN is received. So, we just use
     // the previous value of the advWnd.
     if (m_tcb->m_rxBuffer->GotFin ())
@@ -4629,7 +4549,6 @@ PaceTcpSocketBase::AdvertisedWindowSize (bool scale) const
                       "Unexpected sequence number values");
         w = static_cast<uint32_t> (m_tcb->m_rxBuffer->MaxRxSequence () - m_tcb->m_rxBuffer->NextRxSequence ());
     }
-
     // Ugly, but we are not modifying the state, that variable
     // is used only for tracing purpose.
     if (w != m_advWnd)
@@ -4648,7 +4567,6 @@ PaceTcpSocketBase::AdvertisedWindowSize (bool scale) const
     NS_LOG_LOGIC ("Returning AdvertisedWindowSize of " << static_cast<uint16_t> (w));
     return static_cast<uint16_t> (w);
 }
-
 // Receipt of new packet, put into Rx buffer
 void
 PaceTcpSocketBase::ReceivedData (Ptr<Packet> p, const TcpHeader& tcpHeader)
@@ -4656,7 +4574,6 @@ PaceTcpSocketBase::ReceivedData (Ptr<Packet> p, const TcpHeader& tcpHeader)
     NS_LOG_FUNCTION (this << tcpHeader);
     NS_LOG_DEBUG ("Data segment, seq=" << tcpHeader.GetSequenceNumber () <<
                   " pkt size=" << p->GetSize () );
-
     // Put into Rx buffer
     SequenceNumber32 expectedSeq = m_tcb->m_rxBuffer->NextRxSequence ();
     if (!m_tcb->m_rxBuffer->Add (p, tcpHeader))
@@ -4741,7 +4658,6 @@ PaceTcpSocketBase::ReceivedData (Ptr<Packet> p, const TcpHeader& tcpHeader)
         }
     }
 }
-
 /**
  * \brief Estimate the RTT
  *
@@ -4754,33 +4670,89 @@ PaceTcpSocketBase::EstimateRtt (const TcpHeader& tcpHeader)
 {
     SequenceNumber32 ackSeq = tcpHeader.GetAckNumber ();
     Time m = Time (0.0);
-
     // 自己加的
     if (m_timestampEnabled && tcpHeader.HasOption (TcpOption::TS))
     {
         Ptr<const TcpOptionTS> ts;
         ts = DynamicCast<const TcpOptionTS> (tcpHeader.GetOption (TcpOption::TS));
-
         if (ts->GetEcho () != m_lastEcho)
         {
             m_lastEcho = ts->GetEcho ();
-
             Time rtt = TcpOptionTS::ElapsedTimeFromTsValue (ts->GetEcho ());   // all
-
             m_ReceRttEstimator->Measurement (rtt);
             m_lastReceRtt = m_ReceRttEstimator->GetEstimate();
+
             // m_minRxRTT = std::min (m_lastReceRtt.Get (), m_minRxRTT);
             // m_maxRxRTT = std::max (rtt, m_maxRxRTT);
 
+
+            Time now = Simulator::Now();
+
+            m_maxRxRTT = Time ("205ms");
             m_minRxRTT = Time ("100ms");
-            m_maxRxRTT = Time ("150ms");
+
+
+            // if (m_minRxRTT == Time::Max ())
+            // {
+            //     m_minRxRTT = m_lastReceRtt.Get ();
+            //     m_lastSamplingTime = now;
+            //     timeVector.clear ();
+            //     m_samplingRTT = Time::Max ();
+
+            //     m_minRttUpdateEvent.Cancel ();
+            //     m_minRttUpdateEvent = Simulator::Schedule (m_intervalRttTime, &PaceTcpSocketBase::EntrMinRttProbe, this);
+            // }
+            // if (m_pacingState == PC_MNRTT)
+            // {
+            //     if (m_minTmpRxRTT >= m_lastReceRtt.Get ())
+            //     {
+            //         m_minTmpRxRTT = std::min (m_lastReceRtt.Get (), m_minTmpRxRTT);
+            //     }
+            // }
+            // else
+            // {
+            //     // if (m_minRxRTT >= m_lastReceRtt.Get ())
+            //     // {
+            //     //     // m_minRxRTT = std::min (m_lastReceRtt.Get (), m_minRxRTT);
+            //     //     // m_minRttUpdateEvent.Cancel ();
+            //     //     // m_minRttUpdateEvent = Simulator::Schedule (m_intervalRttTime, &PaceTcpSocketBase::EntrMinRttProbe, this);
+            //     // }
+            //     // else if (m_lastReceRtt < m_delayLow)
+            //     // {
+            //     //     m_minRttUpdateEvent.Cancel ();
+            //     //     m_minRttUpdateEvent = Simulator::Schedule (m_intervalRttTime, &PaceTcpSocketBase::EntrMinRttProbe, this);
+            //     // }
+
+            //     if (now >= m_lastSamplingTime + Time ("10ms") && m_samplingRTT < m_maxRxRTT)
+            //     {
+            //         timeVector.push_back (m_samplingRTT);
+            //         m_lastSamplingTime = now;
+            //         m_samplingRTT = m_lastReceRtt.Get ();
+
+            //         if (timeVector.size () == 100)
+            //         {
+            //             std::sort(timeVector.begin (), timeVector.end ());
+            //             if (m_minRxRTT > timeVector[5])
+            //             {
+            //                 m_minRxRTT = timeVector[5];
+            //                 m_minRttUpdateEvent.Cancel ();
+            //                 m_minRttUpdateEvent = Simulator::Schedule (m_intervalRttTime, &PaceTcpSocketBase::EntrMinRttProbe, this);
+            //             }
+            //             timeVector.clear ();
+            //         }
+            //     }
+            //     else
+            //     {
+            //         m_lastSamplingTime = now;
+            //         m_samplingRTT = std::min (m_samplingRTT, m_lastReceRtt.Get ());
+            //     }
+
+            // }
 
             m_delayLow  = (m_maxRxRTT - m_minRxRTT) * m_alpha + m_minRxRTT;
             m_delayHigh = (m_maxRxRTT - m_minRxRTT) * m_beta  + m_minRxRTT;
         }
-
     }
-
     // An ack has been received, calculate rtt and log this measurement
     // Note we use a linear search (O(n)) for this since for the common
     // case the ack'ed packet will be at the head of the list
@@ -4801,7 +4773,6 @@ PaceTcpSocketBase::EstimateRtt (const TcpHeader& tcpHeader)
             }
         }
     }
-
     // Now delete all ack history with seq <= ack
     while (!m_history.empty ())
     {
@@ -4812,7 +4783,6 @@ PaceTcpSocketBase::EstimateRtt (const TcpHeader& tcpHeader)
         }
         m_history.pop_front (); // Remove
     }
-
     if (!m.IsZero ())
     {
         m_rateOps->UpdateRtt(m);
@@ -4824,7 +4794,6 @@ PaceTcpSocketBase::EstimateRtt (const TcpHeader& tcpHeader)
         NS_LOG_INFO (this << m_tcb->m_lastRtt << m_tcb->m_minRtt);
     }
 }
-
 // Called by the ReceivedAck() when new ACK received and by ProcessSynRcvd()
 // when the three-way handshake completed. This cancels retransmission timer
 // and advances Tx window
@@ -4832,10 +4801,8 @@ void
 PaceTcpSocketBase::NewAck (SequenceNumber32 const& ack, bool resetRTO)
 {
     NS_LOG_FUNCTION (this << ack);
-
     // Reset the data retransmission count. We got a new ACK!
     m_dataRetrCount = m_dataRetries;
-
     if (m_state != SYN_RCVD && resetRTO)
     {   // Set RTO unless the ACK is received in SYN_RCVD state
         NS_LOG_LOGIC (this << " Cancelled ReTxTimeout event which was set to expire at " <<
@@ -4844,17 +4811,14 @@ PaceTcpSocketBase::NewAck (SequenceNumber32 const& ack, bool resetRTO)
         // On receiving a "New" ack we restart retransmission timer .. RFC 6298
         // RFC 6298, clause 2.4
         m_rto = Max (m_rtt->GetEstimate () + Max (m_clockGranularity, m_rtt->GetVariation () * 4), m_minRto);
-
         NS_LOG_LOGIC (this << " Schedule ReTxTimeout at time " <<
                       Simulator::Now ().GetSeconds () << " to expire at time " <<
                       (Simulator::Now () + m_rto.Get ()).GetSeconds ());
         m_retxEvent = Simulator::Schedule (m_rto, &PaceTcpSocketBase::ReTxTimeout, this);
     }
-
     // Note the highest ACK and tell app to send more
     NS_LOG_LOGIC ("TCP " << this << " NewAck " << ack <<
                   " numberAck " << (ack - m_txBuffer->HeadSequence ())); // Number bytes ack'ed
-
     if (GetTxAvailable () > 0)
     {
         NotifySend (GetTxAvailable ());
@@ -4870,7 +4834,6 @@ PaceTcpSocketBase::NewAck (SequenceNumber32 const& ack, bool resetRTO)
         m_retxEvent.Cancel ();
     }
 }
-
 // Retransmit timeout
 void
 PaceTcpSocketBase::ReTxTimeout ()
@@ -4882,7 +4845,6 @@ PaceTcpSocketBase::ReTxTimeout ()
     {
         return;
     }
-
     if (m_state == SYN_SENT)
     {
         NS_ASSERT (m_synCount > 0);
@@ -4896,7 +4858,6 @@ PaceTcpSocketBase::ReTxTimeout ()
         }
         return;
     }
-
     // Retransmit non-data packet: Only if in FIN_WAIT_1 or CLOSING state
     if (m_txBuffer->Size () == 0)
     {
@@ -4906,7 +4867,6 @@ PaceTcpSocketBase::ReTxTimeout ()
         }
         return;
     }
-
     NS_LOG_DEBUG ("Checking if Connection is Established");
     // If all data are received (non-closing socket and nothing to send), just return
     if (m_state <= ESTABLISHED && m_txBuffer->HeadSequence () >= m_tcb->m_highTxMark && m_txBuffer->Size () == 0)
@@ -4914,7 +4874,6 @@ PaceTcpSocketBase::ReTxTimeout ()
         NS_LOG_DEBUG ("Already Sent full data" << m_txBuffer->HeadSequence () << " " << m_tcb->m_highTxMark);
         return;
     }
-
     if (m_dataRetrCount == 0)
     {
         NS_LOG_INFO ("No more data retries available. Dropping connection");
@@ -4926,18 +4885,15 @@ PaceTcpSocketBase::ReTxTimeout ()
     {
         --m_dataRetrCount;
     }
-
     uint32_t inFlightBeforeRto = BytesInFlight ();
     bool resetSack = !m_sackEnabled; // Reset SACK information if SACK is not enabled.
                                     // The information in the TcpTxBuffer is guessed, in this case.
-
     // Reset dupAckCount
     m_dupAckCount = 0;
     if (!m_sackEnabled)
     {
         m_txBuffer->ResetRenoSack ();
     }
-
     // From RFC 6675, Section 5.1
     // [RFC2018] suggests that a TCP sender SHOULD expunge the SACK
     // information gathered from a receiver upon a retransmission timeout
@@ -5782,15 +5738,6 @@ PaceTcpSocketBase::UpdateAckPacingRate ()
         if (m_roundStart)
         {
             m_pacingAckRate = m_maxBandwidth;
-
-            // if (m_currRoundRtt < m_delayHigh)
-            // {
-            //     m_exitRecovery = true;
-            // }
-            // else
-            // {
-            //     m_enterDrain = true;
-            // }
         }
 
     case PC_STABL:
@@ -5816,6 +5763,10 @@ PaceTcpSocketBase::UpdateAckPacingRate ()
         }
         break;
 
+    case PC_MNRTT:
+        m_pacingAckRate = DataRate(m_pacingAckRate);
+        break;
+
     default:
         break;
     }
@@ -5830,8 +5781,11 @@ PaceTcpSocketBase::UpdateAckPacingRate ()
         }
         else if (m_pacingState == PC_STABL)
         {
+            std::cout << (int)index << " - time:" << Simulator::Now().GetSeconds () << " old: " << tmp.GetBitRate () * 1.0 / 1000/ 1000 << ", new: " << m_pacingAckRate.GetBitRate () * 1.0 / 1000/ 1000 << ", minRTT: " << m_minRxRTT.GetMicroSeconds () / 1000.0 << ", RTT: " << m_lastRoundRtt.GetMicroSeconds () / 1000.0 << std::endl;
+        }
+        else if (m_pacingState == PC_MNRTT)
+        {
             std::cout << (int)index << " - time:" << Simulator::Now().GetSeconds () << " old: " << tmp.GetBitRate () * 1.0 / 1000/ 1000 << ", new: " << m_pacingAckRate.GetBitRate () * 1.0 / 1000/ 1000 << std::endl;
-
         }
         
         targetRateFile << (Simulator::Now() - TimeStep (1)).GetSeconds () << "\t" << tmp.GetBitRate() * 1.0 / 1000/ 1000 << std::endl;
@@ -5839,12 +5793,33 @@ PaceTcpSocketBase::UpdateAckPacingRate ()
     }
 }
 
-// void
-// PaceTcpSocketBase::UpdateParameter ()
-// {
-// }
-
 uint8_t PaceTcpSocketBase::Index = 0;
 
-} // namespace ns3
+void 
+PaceTcpSocketBase::EntrMinRttProbe ()
+{
+    m_pacingState = PC_MNRTT;
+    m_minTmpRxRTT = Time::Max ();
+    m_bfPrbRttRate = m_maxBwFilter.GetBest ();
+    m_pacingAckRate = DataRate (m_bfPrbRttRate.GetBitRate () / 20);
+    m_exitRttProbeEvent = Simulator::Schedule (m_probeRttTime, &PaceTcpSocketBase::ExitMinRttProbe, this);
 
+    std::cout << (int)index << " - Enter PC_MNRTT - time: new: " << m_pacingAckRate.GetBitRate () * 1.0 / 1000/ 1000 << std::endl;
+
+}
+
+void 
+PaceTcpSocketBase::ExitMinRttProbe ()
+{
+    m_pacingState = PC_STABL;
+    m_minRxRTT = m_minTmpRxRTT;
+    m_maxBwFilter.Reset (m_bfPrbRttRate, m_round);
+    m_pacingAckRate = m_bfPrbRttRate;
+    m_minRttUpdateEvent.Cancel ();
+    m_minRttUpdateEvent = Simulator::Schedule (m_intervalRttTime, &PaceTcpSocketBase::EntrMinRttProbe, this);
+
+    std::cout << (int)index << " - Exit PC_MNRTT - time: new: " << m_pacingAckRate.GetBitRate () * 1.0 / 1000/ 1000 << "Mbps" 
+    << ", minRTT = " << m_minRxRTT.GetMicroSeconds () / 1000.0 << "ms"<< std::endl;
+}
+
+} // namespace ns3
