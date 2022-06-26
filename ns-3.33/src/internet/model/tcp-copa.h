@@ -1,3 +1,11 @@
+/*
+ * @Author: Zhang Bochun
+ * @Date: 2022-06-06 22:58:59
+ * @LastEditTime: 2022-06-25 13:43:58
+ * @LastEditors: Zhang Bochun
+ * @Description: 
+ * @FilePath: /ns-3.33/src/internet/model/tcp-copa.h
+ */
 #pragma once
 #include <string>
 #include "ns3/tcp-congestion-ops.h"
@@ -39,7 +47,7 @@ public:
     virtual void CongControl (Ptr<TcpSocketState> tcb,const TcpRateOps::TcpRateConnection &rc,
                             const TcpRateOps::TcpRateSample &rs);
     virtual Ptr<TcpCongestionOps> Fork ();
-private:
+public:
     struct VelocityState {
         enum Direction {
             None,

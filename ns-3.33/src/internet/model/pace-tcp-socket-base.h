@@ -1,7 +1,7 @@
 /*
  * @Author: Zhang Bochun
  * @Date: 2022-04-22 10:10:43
- * @LastEditTime: 2022-06-21 20:34:55
+ * @LastEditTime: 2022-06-25 13:41:23
  * @LastEditors: Zhang Bochun
  * @Description: Receiver Pace ACK Tcp Socket Base
  * @FilePath: /ns-3.33/src/internet/model/pace-tcp-socket-base.h
@@ -23,11 +23,14 @@
 #include "ns3/node.h"
 #include "ns3/tcp-socket-state.h"
 #include "ns3/tcp-socket-base.h"
+#include "ns3/tcp-copa.h"
+
+
 
 #include "tcp-rate-ops.h"
 #include "tcp-tx-buffer.h"
 #include "tcp-option-ts.h"
-#include "windowed-filter.h"
+// #include "windowed-filter.h"
 
 #include <fstream>
 
@@ -48,6 +51,7 @@ class TcpOption;
 class Ipv4Interface;
 class Ipv6Interface;
 class TcpRateOps;
+class TcpCopa;
 
 class TcpSocketState;
 class SimulationTcpSocket;
@@ -194,6 +198,9 @@ protected:
     bool    m_isAckPacingEnable  {true};
     Ptr<SimulationTcpSocket>    m_peerSocket;
 
+    Ptr<TcpSocketState>     m_socketState;
+    Ptr<TcpCopa>   m_copa;
+
 
     TcpPacketList   m_ackList;
     TcpPacketList   m_ackSentList;
@@ -206,28 +213,35 @@ protected:
     DataRate    m_roundMaxBW[3] {0, 0, 0};      // 上上个 round的最大bw, 上个round的最大bw, 这个round的最大bw
     DataRate    m_lastRndPCR[3] {0, 0, 0};      // 对应的是最大 pacing 速度
 
-    Time        m_recentRtt[3] = {Time (0), Time (0), Time (0)};
 
     TracedValue<Time>   m_lastSendRtt;
     TracedValue<Time>   m_lastReceRtt;
     Ptr<RttEstimator>   m_SendRttEstimator;
     Ptr<RttEstimator>   m_ReceRttEstimator;
+
+
+    TcpRateOps::TcpRateSample m_ratesample;
+
     
 
     Time    m_lastRxTime {"0s"};
-    Time    m_minRxRTT {Time::Max ()};
-    Time    m_maxRxRTT {0};
+    Time    m_minRxRTT {Time::Max ()};      // 最小 RTT
+    Time    m_maxRxRTT {0};                 // 最大 RTT
+    Time    m_recentRTT  {"0s"};            // 最新得到的 RTT 样本
     Time    m_minTmpRxRTT {Time::Max ()};
     Time    m_lastRoundRtt {0};
     Time    m_currRoundRtt {0};
     Time    m_delayLow;
     Time    m_delayHigh;
+    Time    m_delayThresh;
     Time    m_timestampOffset;
     Time    m_probeRttTime {"200ms"};
     Time    m_intervalRttTime {"10s"};
-    Time    m_samplingRTT {Time::Max ()};
-    Time    m_lastSamplingTime;
-    std::vector<Time> timeVector;
+    Time    m_samplingMinRTT {Time::Max ()};
+    Time    m_samplingMaxRTT {Time::Min ()};
+    Time    m_lastSamplingTime;             // RTT 采样结果
+    std::vector<Time> minRTTSamplingVector;
+    std::vector<Time> maxRTTSamplingVector;
 
     double  m_alpha {0.05}, m_beta {0.20};
     DataRate m_step = DataRate ("0.2Mbps");
@@ -237,10 +251,12 @@ protected:
 
 
     PacingState     m_pacingState {PC_BEGIN};
+    PacingState     m_lastPacingState {PC_BEGIN};
 
     bool            m_exitRecovery {false};
     bool            m_enterDrain   {true};
     bool            m_exitDrain   {false};
+    bool            m_speedDown   {true};
 
     // PacingState     m_pacingState {PC_SLOWSTART};
     DataRate        m_bandwidth     {DataRate("0Mbps")};               // 最新计算得到的 receive rate
@@ -281,11 +297,11 @@ protected:
     void TraceSimSendPacketTx (Ptr<const Packet>, const TcpHeader&, Ptr<const TcpSocketBase>);
     void AppendAck (Ptr<Packet> packet, TcpHeader& header);
     void SendAck ();
-    void PaceAndScheduleAck (Ptr<Packet> packet, TcpHeader header, SequenceNumber32 seq);
+    void PaceAndScheduleNextAck (Ptr<Packet> packet, TcpHeader header, SequenceNumber32 seq);
     void DestoryTcpPacket (TcpPacket* tcpPacket);
     void EntrMinRttProbe ();
     void ExitMinRttProbe ();
-
+    void CalculateRttThreshold (Time rttSample);
     
     TcpSocketState::TcpCongState_t m_lastCongState;
     TracedCallback<Time, Time> m_lastSendRttTrace;

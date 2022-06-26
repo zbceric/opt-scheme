@@ -1,10 +1,10 @@
 /*
  * @Author: Zhang Bochun
  * @Date: 2022-03-13 17:42:06
- * @LastEditTime: 2022-04-07 15:24:25
+ * @LastEditTime: 2022-06-24 19:57:29
  * @LastEditors: Zhang Bochun
  * @Description: 
- * @FilePath: /ns-3.33/scratch/tracer-tcp/tracer-utils.h
+ * @FilePath: /ns-3.33/src/tracer-tcp/model/tracer-utils.h
  */
 
 
@@ -159,6 +159,11 @@ inline TypeId TracerUtils::GetCongestionTypeIdFromName (std::string cc, bool& pa
     else if (cc.compare("bbr") == 0)
     {
         id = TcpBbr::GetTypeId ();
+        pacing = true;
+    }
+    else if (cc.compare("copa") == 0)
+    {
+        id = TcpCopa::GetTypeId ();
         pacing = true;
     }
     else

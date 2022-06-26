@@ -10,10 +10,12 @@ NS_LOG_COMPONENT_DEFINE ("TcpCopa");
 NS_OBJECT_ENSURE_REGISTERED (TcpCopa);
 namespace{
     uint32_t kMinCwndSegment=4;
-    Time kRTTWindowLength=MilliSeconds(10000);
-    Time kSrttWindowLength=MilliSeconds(100);
-    uint32_t AddAndCheckOverflow(uint32_t value,const uint32_t toAdd,uint32_t label){
-        if (std::numeric_limits<uint32_t>::max() - toAdd < value) {
+    Time kRTTWindowLength  = MilliSeconds(10000);
+    Time kSrttWindowLength = MilliSeconds(100);
+    uint32_t AddAndCheckOverflow (uint32_t value, const uint32_t toAdd, uint32_t label)
+    {
+        if (std::numeric_limits<uint32_t>::max() - toAdd < value) 
+        {
             // TODO: the error code is CWND_OVERFLOW but this function can totally be
             // used for inflight bytes.
             std::cout<<value<<" "<<toAdd<<" "<<label<<std::endl;
@@ -22,6 +24,7 @@ namespace{
         value +=(toAdd);
         return value;
     }
+
     template <class T1>
     void subtractAndCheckUnderflow(T1& value, const T1& toSub) {
         if (value < toSub) {
@@ -31,11 +34,14 @@ namespace{
         value -=(toSub);
         return value;
     }
+    
     inline uint64_t DivRoundUp(uint64_t a,uint64_t b){
         uint64_t value=(a+b-1)/b;
         return value;
     }
 }
+
+
 TypeId TcpCopa::GetTypeId (void){
     static TypeId tid = TypeId ("ns3::TcpCopa")
     .SetParent<TcpCongestionOps> ()
@@ -54,99 +60,166 @@ TypeId TcpCopa::GetTypeId (void){
     ;
   return tid;
 }
-TcpCopa::TcpCopa():TcpCongestionOps(),
-m_minRttFilter(kRTTWindowLength.GetMicroSeconds(),Time(0),0),
-m_standingRttFilter(kSrttWindowLength.GetMicroSeconds(),Time(0),0){
+
+
+TcpCopa::TcpCopa()
+: TcpCongestionOps(), 
+m_minRttFilter (kRTTWindowLength.GetMicroSeconds (), Time (0), 0),
+m_standingRttFilter (kSrttWindowLength.GetMicroSeconds (), Time(0), 0)
+{
 #if (TCP_COPA_DEGUG)
     m_debug=CreateObject<TcpBbrDebug>(GetName());
 #endif
 }
 
-TcpCopa::TcpCopa (const TcpCopa &sock):TcpCongestionOps (sock),
-m_minRttFilter(kRTTWindowLength.GetMicroSeconds(),Time(0),0),
-m_standingRttFilter(kSrttWindowLength.GetMicroSeconds(),Time(0),0),
-m_useRttStanding(sock.m_useRttStanding),
-m_isSlowStart(sock.m_isSlowStart),
-m_deltaParam(sock.m_deltaParam){
-    m_lastCwndDoubleTime=Time(0);
+
+TcpCopa::TcpCopa (const TcpCopa &sock)
+: TcpCongestionOps (sock),
+m_minRttFilter (kRTTWindowLength.GetMicroSeconds (), Time (0), 0),
+m_standingRttFilter (kSrttWindowLength.GetMicroSeconds(), Time (0), 0),
+m_useRttStanding (sock.m_useRttStanding),
+m_isSlowStart (sock.m_isSlowStart),
+m_deltaParam (sock.m_deltaParam)
+{
+    m_lastCwndDoubleTime = Time(0);
 #if (TCP_COPA_DEGUG)
-    m_debug=sock.m_debug;
+    m_debug = sock.m_debug;
 #endif
 }
-TcpCopa::~TcpCopa(){}
-std::string TcpCopa::GetName () const{
+
+
+TcpCopa::~TcpCopa() {}
+
+
+std::string TcpCopa::GetName () const
+{
     return "TcpCopa";
 }
-void TcpCopa::Init (Ptr<TcpSocketState> tcb){
-    NS_ASSERT_MSG(tcb->m_pacing,"Enable pacing for Copa");
-    InitPacingRateFromRtt(tcb,2.0);
+
+
+void TcpCopa::Init (Ptr<TcpSocketState> tcb)
+{
+    NS_ASSERT_MSG(tcb->m_pacing, "Enable pacing for Copa");
+    InitPacingRateFromRtt(tcb, 2.0);
 }
-uint32_t TcpCopa::GetSsThresh (Ptr<const TcpSocketState> tcb, uint32_t bytesInFlight){
+
+
+uint32_t TcpCopa::GetSsThresh (Ptr<const TcpSocketState> tcb, uint32_t bytesInFlight)
+{
     return tcb->m_cWnd;
 }
-void TcpCopa::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked){}
-void TcpCopa::PktsAcked (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked, const Time& rtt){}
-void TcpCopa::CongestionStateSet (Ptr<TcpSocketState> tcb,const TcpSocketState::TcpCongState_t newState){
-    
+
+
+void TcpCopa::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
+{}
+
+
+void TcpCopa::PktsAcked (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked, const Time& rtt)
+{}
+
+
+void TcpCopa::CongestionStateSet (Ptr<TcpSocketState> tcb,const TcpSocketState::TcpCongState_t newState)
+{}
+
+
+void TcpCopa::CwndEvent (Ptr<TcpSocketState> tcb,const TcpSocketState::TcpCAEvent_t event)
+{}
+
+
+bool TcpCopa::HasCongControl () const 
+{
+    return true;
 }
-void TcpCopa::CwndEvent (Ptr<TcpSocketState> tcb,const TcpSocketState::TcpCAEvent_t event){}
-bool TcpCopa::HasCongControl () const {return true;}
+
+
 void TcpCopa::CongControl (Ptr<TcpSocketState> tcb,const TcpRateOps::TcpRateConnection &rc,
-                            const TcpRateOps::TcpRateSample &rs){
-    Time rtt=rs.m_rtt;
-    Time srtt=tcb->m_lastRtt;
-    Time event_time=Simulator::Now();
-    m_minRttFilter.Update(rtt,event_time.GetMicroSeconds());
-    auto rtt_min=m_minRttFilter.GetBest();
+                            const TcpRateOps::TcpRateSample &rs)
+{
+    Time rtt = rs.m_rtt;
+    Time srtt = tcb->m_lastRtt;
+    Time event_time = Simulator::Now();
+    m_minRttFilter.Update (rtt, event_time.GetMicroSeconds ());
+    auto rtt_min = m_minRttFilter.GetBest();
     std::string rtt_str=std::to_string(rtt.GetMilliSeconds());
-    NS_ASSERT(Time(0)!=rtt_min);
-    if(m_useRttStanding){
-        m_standingRttFilter.SetWindowLength(srtt.GetMicroSeconds());
-    }else{
-        m_standingRttFilter.SetWindowLength(srtt.GetMicroSeconds()/2);
+    
+    NS_ASSERT (Time(0) != rtt_min);
+    
+    if (m_useRttStanding)
+    {
+        m_standingRttFilter.SetWindowLength (srtt.GetMicroSeconds());
     }
-    m_standingRttFilter.Update(rtt,event_time.GetMicroSeconds());
-    Time rttStanding=m_standingRttFilter.GetBest();
-    NS_ASSERT(Time(0)!=rttStanding);
-    if(rttStanding<rtt_min){
+    else
+    {
+        m_standingRttFilter.SetWindowLength (srtt.GetMicroSeconds()/2);
+    }
+
+    m_standingRttFilter.Update (rtt, event_time.GetMicroSeconds());
+    Time rttStanding = m_standingRttFilter.GetBest();
+    
+    NS_ASSERT (Time(0) != rttStanding);
+    
+    if (rttStanding < rtt_min)
+    {
         return ;
     }
-    if(rs.m_ackedSacked){
-        m_ackBytesRound+=rs.m_ackedSacked;
+    
+    if (rs.m_ackedSacked)
+    {
+        m_ackBytesRound += rs.m_ackedSacked;
     }
+
     uint64_t delay_us;
-    uint32_t packet_size=1500;
-    uint32_t cwnd_bytes=tcb->m_cWnd;
-    if(m_useRttStanding){
-        delay_us=rttStanding.GetMicroSeconds()-rtt_min.GetMicroSeconds();
-    }else{
-        delay_us=rtt.GetMicroSeconds()-rtt_min.GetMicroSeconds();
+    uint32_t packet_size = 1500;
+    uint32_t cwnd_bytes = tcb->m_cWnd;
+    if (m_useRttStanding)
+    {
+        delay_us = rttStanding.GetMicroSeconds () - rtt_min.GetMicroSeconds ();
     }
-    if(Time(0)==rttStanding){
+    else
+    {
+        delay_us = rtt.GetMicroSeconds () - rtt_min.GetMicroSeconds ();
+    }
+
+    if (Time(0) == rttStanding)
+    {
         NS_LOG_FUNCTION("zero standing rtt"<<rtt);
         return ;
     }
-    bool increase_cwnd=false;
-    if(0==delay_us){
-        increase_cwnd=true;
-    }else{
-        double target_rate=1.0*packet_size*1000000/(delay_us*m_deltaParam);
-        double current_rate=1.0*cwnd_bytes*1000000/rttStanding.GetMicroSeconds();
-        if(target_rate>=current_rate){
-            increase_cwnd=true;
+   
+    bool increase_cwnd = false;
+    
+    if (0 == delay_us)
+    {
+        increase_cwnd = true;
+    }
+    else
+    {
+        double target_rate  = 1.0 * packet_size * 1000000 / (delay_us * m_deltaParam);
+        double current_rate = 1.0 *  cwnd_bytes * 1000000 / rttStanding.GetMicroSeconds ();
+
+        if (target_rate >= current_rate)
+        {
+            increase_cwnd = true;
         }
     }
     
-    if(!(increase_cwnd&&m_isSlowStart)){
-        CheckAndUpdateDirection(event_time,srtt,cwnd_bytes);
+    if (!(increase_cwnd && m_isSlowStart))
+    {
+        CheckAndUpdateDirection (event_time, srtt, cwnd_bytes);
     }
-    if(increase_cwnd){
-        if(m_isSlowStart){
-        // When a flow starts, Copa performs slow-start where
-        // cwnd doubles once per RTT until current rate exceeds target rate".
-            if(Time(0)==m_lastCwndDoubleTime){
+    if (increase_cwnd)
+    {
+        // 慢启动
+        if(m_isSlowStart)
+        {
+            // When a flow starts, Copa performs slow-start where
+            // cwnd doubles once per RTT until current rate exceeds target rate".
+            if(Time(0)==m_lastCwndDoubleTime)
+            {
                 m_lastCwndDoubleTime=event_time;
-            }else if(event_time-m_lastCwndDoubleTime>srtt){
+            }
+            else if(event_time-m_lastCwndDoubleTime>srtt)
+            {
                 uint32_t addition=0;
                 if(m_ackBytesRound>0){
                     addition=cwnd_bytes;
@@ -156,9 +229,13 @@ void TcpCopa::CongControl (Ptr<TcpSocketState> tcb,const TcpRateOps::TcpRateConn
                 tcb->m_cWnd=new_cwnd;
                 m_lastCwndDoubleTime=event_time;
             }
-        }else{
+        }
+        // 非慢启动
+        else
+        {
             if(m_velocityState.direction!=VelocityState::Direction::Up
-                &&m_velocityState.velocity>1){
+                &&m_velocityState.velocity>1)
+            {
             // if our current rate is much different than target, we double v every
             // RTT. That could result in a high v at some point in time. If we
             // detect a sudden direction change here, while v is still very high but
@@ -168,14 +245,17 @@ void TcpCopa::CongControl (Ptr<TcpSocketState> tcb,const TcpRateOps::TcpRateConn
             uint32_t mss=tcb->m_segmentSize;
             uint32_t acked_packets=DivRoundUp(rs.m_ackedSacked,mss);
             uint32_t addition=0;
-            if(acked_packets){
+            if(acked_packets)
+            {
                 addition=(acked_packets*mss*mss*m_velocityState.velocity)/(m_deltaParam*cwnd_bytes);
             }
             uint32_t new_cwnd=AddAndCheckOverflow(cwnd_bytes,addition,174);
             m_ackBytesRound=0;
             tcb->m_cWnd=new_cwnd;
         }
-    }else{
+    }
+    else
+    {
         if(m_velocityState.direction!=VelocityState::Direction::Down&&m_velocityState.velocity>1){
             ChangeDirection(event_time,VelocityState::Direction::Down,cwnd_bytes);
         }
